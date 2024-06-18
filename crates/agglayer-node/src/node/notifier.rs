@@ -1,74 +1,50 @@
 use std::sync::Arc;
 
 use agglayer_certificate_orchestrator::{EpochPacker, Error};
+use agglayer_config::certificate_orchestrator::prover::ProverConfig;
+use error::NotifierError;
 use futures::future::BoxFuture;
-use sp1_sdk::{NetworkProver, Prover, SP1Proof, SP1ProvingKey, SP1Stdin, SP1VerifyingKey};
+use proof::Proof;
+use sp1::SP1;
+use sp1_sdk::{LocalProver, NetworkProver};
 use tracing::{debug, error, info};
 
-const ELF: &[u8] = include_bytes!("../../../../elf/riscv32im-succinct-zkvm-elf");
+const ELF: &[u8] =
+    include_bytes!("../../../pessimistic-proof-program/elf/riscv32im-succinct-zkvm-elf");
 
-/// The SP1 prover that can generate and verify proofs for the aggregator.
-pub(crate) struct SP1 {
-    prover: NetworkProver,
-    proving_key: SP1ProvingKey,
-    verifying_key: SP1VerifyingKey,
-}
-
-impl AggregatorProver for SP1 {
-    type Proof = SP1Proof;
-
-    fn prove(
-        &self,
-        to_pack: Vec<()>,
-    ) -> impl std::future::Future<Output = Result<Self::Proof, anyhow::Error>> + std::marker::Send
-    {
-        let mut stdin = SP1Stdin::new();
-        stdin.write(&to_pack);
-
-        async move { self.prover.prove(&self.proving_key.elf, stdin).await }
-    }
-
-    fn verify(&self, proof: &Self::Proof) -> Result<(), anyhow::Error> {
-        Ok(self.prover.verify(proof, &self.verifying_key)?)
-    }
-}
+mod error;
+mod proof;
+mod sp1;
+#[cfg(test)]
+mod tests;
 
 pub(crate) trait AggregatorProver: Send + Sync {
-    type Proof;
-
-    fn prove(
-        &self,
-        to_pack: Vec<()>,
-    ) -> impl std::future::Future<Output = Result<Self::Proof, anyhow::Error>> + std::marker::Send;
-    fn verify(&self, proof: &Self::Proof) -> Result<(), anyhow::Error>;
+    fn prove(&self, to_pack: Vec<()>) -> BoxFuture<'_, Result<Proof, anyhow::Error>>;
+    fn verify(&self, proof: &Proof) -> Result<(), anyhow::Error>;
 }
 
 #[derive(Clone)]
-pub(crate) struct AggregatorNotifier<P> {
-    prover: Arc<P>,
+pub(crate) struct AggregatorNotifier {
+    prover: Arc<dyn AggregatorProver>,
 }
 
-impl AggregatorNotifier<SP1> {
-    pub(crate) fn new() -> Self {
-        let client = NetworkProver::new();
-        let (proving_key, verifying_key) = client.setup(ELF);
+impl TryFrom<ProverConfig> for AggregatorNotifier {
+    type Error = NotifierError;
 
-        let prover = SP1 {
-            prover: client,
-            proving_key,
-            verifying_key,
-        };
-
-        Self {
-            prover: Arc::new(prover),
+    fn try_from(config: ProverConfig) -> Result<Self, Self::Error> {
+        match config {
+            ProverConfig::SP1Network {} => Ok(Self {
+                prover: Arc::new(SP1::new(NetworkProver::new(), ELF)),
+            }),
+            ProverConfig::SP1Local {} => Ok(Self {
+                prover: Arc::new(SP1::new(LocalProver::new(), ELF)),
+            }),
+            ProverConfig::SP1Mock {} => Err(NotifierError::UnableToBuildNotifier),
         }
     }
 }
 
-impl<P> EpochPacker for AggregatorNotifier<P>
-where
-    P: AggregatorProver + Send + 'static,
-{
+impl EpochPacker for AggregatorNotifier {
     fn pack<T: IntoIterator<Item = ()>>(
         &self,
         epoch: u64,
@@ -93,7 +69,10 @@ where
 
                 Err(Error::ProofVerificationFailed)
             } else {
-                info!("successfully generated and verified proof for the program!");
+                info!(
+                    "successfully generated and verified proof for the
+            program!"
+                );
                 Ok(())
             }
         }))
