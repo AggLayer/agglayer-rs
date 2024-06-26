@@ -18,4 +18,6 @@ sp1-derive = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testne
 
 [dev-dependencies]
 hex = "0.4.3"
+lazy_static = "1.4.0"
 rs_merkle = { version = "1.4", default-features = false }
+rstest = "0.21.0"
