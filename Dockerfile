@@ -9,7 +9,6 @@ COPY --link crates crates
 COPY --link xtask xtask
 COPY --link Cargo.toml Cargo.toml
 COPY --link Cargo.lock Cargo.lock
-COPY --link elf elf
 
 RUN cargo chef prepare --recipe-path recipe.json --bin agglayer
 
@@ -24,7 +23,6 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY --link crates crates
 COPY --link Cargo.toml Cargo.toml
 COPY --link Cargo.lock Cargo.lock
-COPY --link elf elf
 
 RUN cargo build --release --bin agglayer
 

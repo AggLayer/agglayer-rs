@@ -5,7 +5,6 @@
 !src
 !crates
 !xtask
-!elf
 !tests
 !Cargo.*
 !.git
