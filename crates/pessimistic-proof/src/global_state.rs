@@ -11,14 +11,15 @@ use crate::{
 /// Local state of one network.
 /// The AggLayer tracks the [`LocalNetworkState`] for all networks.
 /// Eventually, this state will be entirely tracked by the networks themselves.
+#[derive(Clone, Debug)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`].
-    exit_tree: LocalExitTree<Keccak256Hasher>,
+    pub exit_tree: LocalExitTree<Keccak256Hasher>,
     /// Commitment to the balance for each token.
-    balance_tree: BalanceTree,
+    pub balance_tree: BalanceTree,
     /// Commitment to the imported [`BridgeExit`].
     #[allow(dead_code)]
-    nullifier_tree: BTreeSet<(NetworkId, BridgeExit)>,
+    pub nullifier_tree: BTreeSet<(NetworkId, BridgeExit)>,
 }
 
 impl LocalNetworkState {

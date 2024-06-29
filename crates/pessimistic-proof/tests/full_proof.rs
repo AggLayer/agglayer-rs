@@ -1,15 +1,13 @@
-use std::collections::BTreeMap;
-
 use lazy_static::lazy_static;
 use pessimistic_proof::{
     certificate::Certificate,
     generate_leaf_proof,
-    local_balance_tree::{Balance, BalanceTree, BalanceTreeByNetwork, Deposit},
+    local_balance_tree::{BalanceTree, Deposit},
     local_exit_tree::{hasher::Keccak256Hasher, LocalExitTree},
-    BridgeExit, NetworkId, ProofError, TokenInfo,
+    BridgeExit, LocalNetworkState, NetworkId, ProofError, TokenInfo,
 };
 use reth_primitives::{address, U256};
-use rstest::{fixture, rstest};
+use rstest::rstest;
 
 lazy_static! {
     pub static ref NETWORK_A: NetworkId = 0.into();
@@ -22,6 +20,21 @@ lazy_static! {
         origin_network: *NETWORK_A,
         origin_token_address: address!("0000000000000000000000000000000000000000"),
     };
+    pub static ref DUMMY_LET: LocalExitTree<Keccak256Hasher> =
+        LocalExitTree::from_leaves([[0_u8; 32], [1_u8; 32], [2_u8; 32]].into_iter());
+}
+
+struct Amounts {
+    eth: u32,
+    usdc: u32,
+}
+
+impl From<Amounts> for BalanceTree {
+    fn from(v: Amounts) -> Self {
+        let eth = (ETH.clone(), Deposit(U256::from(v.eth)).into());
+        let usdc = (USDC.clone(), Deposit(U256::from(v.usdc)).into());
+        BalanceTree::from(vec![eth, usdc])
+    }
 }
 
 fn make_tx(_from: u32, to: u32, token: &TokenInfo, amount: u32) -> BridgeExit {
@@ -36,98 +49,57 @@ fn make_tx(_from: u32, to: u32, token: &TokenInfo, amount: u32) -> BridgeExit {
     )
 }
 
-#[fixture]
-fn state_transition() -> Vec<Certificate> {
-    let eth = ETH.clone();
-    let usdc = USDC.clone();
-
-    // Prepare the data fetched from the CDK: BridgeExits + LBT
-    // BridgeExits
-    let withdraw_0_to_1 = vec![make_tx(0, 1, &eth, 10), make_tx(0, 1, &usdc, 100)];
-    let withdraw_1_to_0 = vec![make_tx(1, 0, &eth, 20), make_tx(1, 0, &usdc, 200)];
-
-    let dummy_let: LocalExitTree<Keccak256Hasher> =
-        LocalExitTree::from_leaves([[0_u8; 32], [1_u8; 32], [2_u8; 32]].into_iter());
-
-    vec![
-        Certificate::new(*NETWORK_A, dummy_let.get_root(), withdraw_0_to_1.clone()),
-        Certificate::new(*NETWORK_B, dummy_let.get_root(), withdraw_1_to_0.clone()),
-    ]
+fn state_transition(v: Amounts) -> Certificate {
+    Certificate::new(
+        *NETWORK_A,
+        DUMMY_LET.get_root(),
+        vec![make_tx(0, 1, &ETH, v.eth), make_tx(0, 1, &USDC, v.usdc)],
+    )
 }
 
-mod should_detect_debtor {
-    use pessimistic_proof::LocalNetworkState;
-
-    use super::*;
-
-    #[fixture]
-    fn initial_state() -> LocalNetworkState {
-        let deposit_eth =
-            |v: u32| -> (TokenInfo, Balance) { (ETH.clone(), Deposit(U256::from(v)).into()) };
-        let deposit_usdc =
-            |v: u32| -> (TokenInfo, Balance) { (USDC.clone(), Deposit(U256::from(v)).into()) };
-
-        let dummy_let =
-            LocalExitTree::from_leaves([[0_u8; 32], [1_u8; 32], [2_u8; 32]].into_iter());
-
-        let initial_0 = BalanceTree::from(vec![deposit_eth(10), deposit_usdc(10)]);
-        let initial_1 = BalanceTree::from(vec![deposit_eth(1), deposit_usdc(200)]);
-
-        let global_balance_tree: BalanceTreeByNetwork = {
-            let base: BTreeMap<NetworkId, BalanceTree> =
-                [(*NETWORK_A, initial_0), (*NETWORK_B, initial_1)].into();
-            base.into()
-        };
-
-        State {
-            global_exit_tree: [(*NETWORK_A, dummy_let.clone()), (*NETWORK_B, dummy_let.clone())]
-                .into(),
-            global_balance_tree,
-        }
-    }
-
-    #[rstest]
-    fn prove(initial_state: State, state_transition: Vec<Certificate>) {
-        assert!(matches!(
-            generate_leaf_proof(initial_state, state_transition),
-            Err(ProofError::HasDebt { .. })
-        ));
+fn initial_state(amount: Amounts) -> LocalNetworkState {
+    LocalNetworkState {
+        exit_tree: DUMMY_LET.clone(),
+        balance_tree: amount.into(),
+        nullifier_tree: Default::default(),
     }
 }
 
-mod should_succeed {
-    use super::*;
+#[rstest]
+fn should_succeed() {
+    let state = initial_state(Amounts { eth: 10, usdc: 100 });
 
-    #[fixture]
-    fn initial_state() -> State {
-        let deposit_eth =
-            |v: u32| -> (TokenInfo, Balance) { (ETH.clone(), Deposit(U256::from(v)).into()) };
-        let deposit_usdc =
-            |v: u32| -> (TokenInfo, Balance) { (USDC.clone(), Deposit(U256::from(v)).into()) };
+    let cert = state_transition(Amounts { eth: 10, usdc: 100 });
+    assert!(generate_leaf_proof(state.clone(), cert).is_ok());
 
-        let dummy_let =
-            LocalExitTree::from_leaves([[0_u8; 32], [1_u8; 32], [2_u8; 32]].into_iter());
+    let cert = state_transition(Amounts { eth: 0, usdc: 0 });
+    assert!(generate_leaf_proof(state.clone(), cert).is_ok());
 
-        let initial_0 = BalanceTree::from(vec![deposit_eth(12), deposit_usdc(102)]);
-        let initial_1 = BalanceTree::from(vec![deposit_eth(20), deposit_usdc(201)]);
+    let cert = state_transition(Amounts { eth: 10, usdc: 99 });
+    assert!(generate_leaf_proof(state.clone(), cert).is_ok());
+}
 
-        let global_balance_tree: BalanceTreeByNetwork = {
-            let base: BTreeMap<NetworkId, BalanceTree> =
-                [(*NETWORK_A, initial_0), (*NETWORK_B, initial_1)].into();
-            base.into()
-        };
+#[rstest]
+fn should_detect_debtor() {
+    let state = initial_state(Amounts { eth: 10, usdc: 100 });
 
-        State {
-            global_exit_tree: [(*NETWORK_A, dummy_let.clone()), (*NETWORK_B, dummy_let.clone())]
-                .into(),
-            global_balance_tree,
-        }
-    }
+    let cert = state_transition(Amounts { eth: 10, usdc: 101 });
+    assert!(matches!(
+        generate_leaf_proof(state.clone(), cert),
+        Err(ProofError::HasDebt { .. })
+    ));
 
-    #[rstest]
-    fn prove(initial_state: State, state_transition: Vec<Certificate>) {
-        assert!(generate_leaf_proof(initial_state, state_transition).is_ok())
-    }
+    let cert = state_transition(Amounts { eth: 20, usdc: 200 });
+    assert!(matches!(
+        generate_leaf_proof(state.clone(), cert),
+        Err(ProofError::HasDebt { .. })
+    ));
+
+    let cert = state_transition(Amounts { eth: 0, usdc: 200 });
+    assert!(matches!(
+        generate_leaf_proof(state.clone(), cert),
+        Err(ProofError::HasDebt { .. })
+    ));
 }
 
 #[test]
