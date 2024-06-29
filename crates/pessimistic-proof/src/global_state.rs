@@ -1,4 +1,6 @@
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
 
 use crate::{
     certificate::Certificate,
@@ -11,7 +13,7 @@ use crate::{
 /// Local state of one network.
 /// The AggLayer tracks the [`LocalNetworkState`] for all networks.
 /// Eventually, this state will be entirely tracked by the networks themselves.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocalNetworkState {
     /// Commitment to the [`BridgeExit`].
     pub exit_tree: LocalExitTree<Keccak256Hasher>,
@@ -19,7 +21,7 @@ pub struct LocalNetworkState {
     pub balance_tree: BalanceTree,
     /// Commitment to the imported [`BridgeExit`].
     #[allow(dead_code)]
-    pub nullifier_tree: BTreeSet<(NetworkId, BridgeExit)>,
+    pub nullifier_tree: BTreeMap<NetworkId, Vec<BridgeExit>>,
 }
 
 impl LocalNetworkState {
