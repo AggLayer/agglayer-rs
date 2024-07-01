@@ -33,7 +33,7 @@ tokio-stream = "0.1.15"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.23.2" }
-serde_json = "1.0.116"
+serde_json = "1.0.120"
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 hyper-util = { version = "0.1.5", features = ["client"] }
 http-body-util = "0.1.2"
