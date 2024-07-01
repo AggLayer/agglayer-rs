@@ -88,7 +88,8 @@ impl Node {
             }
         };
 
-        let aggregator_task = AggregatorNotifier::new();
+        let aggregator_task: AggregatorNotifier =
+            config.certificate_orchestrator.prover.clone().try_into()?;
         let clock_subscription =
             tokio_stream::wrappers::BroadcastStream::new(clock_ref.subscribe()?)
                 .filter_map(|value| value.ok());

@@ -1,0 +1,11 @@
+experimental = ["setup-scripts"]
+
+[script.sp1_network_prover]
+command = './scripts/nextest/setup_sp1_network_prover.sh'
+
+[profile.default]
+slow-timeout = "30s"
+
+[[profile.default.scripts]]
+filter = 'test(::sp1::)'
+setup = "sp1_network_prover"

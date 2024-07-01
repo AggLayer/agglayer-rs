@@ -23,8 +23,14 @@ async fn healthcheck_method_can_be_called() {
     let _ = tracing_subscriber::FmtSubscriber::builder()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .try_init();
+    let mut config = Config::default();
+    let addr = next_available_addr();
+    if let std::net::IpAddr::V4(ip) = addr.ip() {
+        config.rpc.host = ip;
+    }
+    config.rpc.port = addr.port();
 
-    let config = Arc::new(Config::default());
+    let config = Arc::new(config);
     let (provider, _mock) = providers::Provider::mocked();
     let (certificate_sender, _certificate_receiver) = tokio::sync::mpsc::channel(1);
 
@@ -127,6 +133,7 @@ async fn send_certificate_method_can_be_called() {
         config.rpc.host = ip;
     }
     config.rpc.port = addr.port();
+
     let config = Arc::new(config);
 
     let (provider, _mock) = providers::Provider::mocked();

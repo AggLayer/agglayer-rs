@@ -18,6 +18,7 @@ serde_with.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-util.workspace = true
+tokio-stream = "0.1.15"
 toml.workspace = true
 tower-http = { version = "0.5.2", features = ["full"] }
 tower.workspace = true
@@ -29,7 +30,11 @@ agglayer-clock = { path = "../agglayer-clock" }
 agglayer-telemetry = { path = "../agglayer-telemetry" }
 agglayer-signer = { path = "../agglayer-signer" }
 agglayer-certificate-orchestrator = { path = "../agglayer-certificate-orchestrator" }
-tokio-stream = "0.1.15"
+
+sp1-sdk = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
+sp1-core = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
+sp1-recursion-compiler = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
+sp1-recursion-core = { git = "https://github.com/succinctlabs/sp1", tag = "v1.0.8-testnet" }
 
 [dev-dependencies]
 jsonrpsee-test-utils = { git = "https://github.com/paritytech/jsonrpsee.git", tag = "v0.23.2" }
@@ -37,3 +42,7 @@ serde_json = "1.0.116"
 agglayer-config = { path = "../agglayer-config", features = ["testutils"] }
 hyper-util = { version = "0.1.5", features = ["client"] }
 http-body-util = "0.1.2"
+
+[features]
+default = ["sp1"]
+sp1 = []

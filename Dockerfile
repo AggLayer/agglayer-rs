@@ -14,6 +14,8 @@ RUN cargo chef prepare --recipe-path recipe.json --bin agglayer
 
 FROM chef AS builder
 
+RUN apt-get update && apt-get install -y libssl-dev pkg-config
+
 COPY --from=planner /app/recipe.json recipe.json
 # Notice that we are specifying the --target flag!
 RUN cargo chef cook --release --recipe-path recipe.json
